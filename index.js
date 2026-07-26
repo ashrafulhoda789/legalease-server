@@ -26,26 +26,124 @@ async function run() {
         await client.connect();
 
         const db = client.db('legal-ease-db')
-        const userCollection = db.collection('user')
+        const userCollection = db.collection('user');
+        const hiringCollection = db.collection('hiring-request');
+        const lawyerProfileCollection = db.collection('lawyer_profiles');
 
-        app.get('/api/lawyers', async(req, res)=>{
-            const query = { role: 'lawyer' };
-            const result = await userCollection.find(query).toArray();
+        app.get('/api/lawyers', async (req, res) => {
+            const result = await lawyerProfileCollection.find().toArray();
             res.send(result);
         })
 
-        app.get('/api/lawyers/:id', async(req, res)=>{
+        app.get('/api/lawyers/:id', async (req, res) => {
             const id = req.params.id;
 
-            const query = {
-                _id: new ObjectId(id), 
-                role: 'lawyer'
-            }
-
-            const result = await userCollection.findOne(query);
+            const query = { _id: new ObjectId(id) };
+            const result = await lawyerProfileCollection.findOne(query);
 
             res.send(result);
         })
+
+        // lawyer manage-legal section api
+        app.get('/api/lawyer-profile/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+
+                const user = await userCollection.findOne(
+                    { email: email },
+                    { projection: { password: 0 } }
+                );
+
+                if (!user) {
+                    return res.status(404).send({ success: false, message: 'User not found' });
+                }
+
+                const profile = await lawyerProfileCollection.findOne({ userId: new ObjectId(user._id) });
+
+                res.send({
+                    success: true,
+                    data: {
+                        user: {
+                            _id: user._id,
+                            name: user.name,
+                            email: user.email,
+                            role: user.role
+                        },
+                        profile: profile || null
+                    }
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+        app.patch('/api/lawyer-profile', async (req, res) => {
+            try {
+                const {
+                    email,
+                    name,
+                    contactNumber,
+                    photoUrl,
+                    specialization,
+                    experienceYears,
+                    barCouncilNo,
+                    consultationFee,
+                    status,
+                    chamberAddress,
+                    bio,
+                    education,
+                    awards
+                } = req.body;
+
+                if (!email) {
+                    return res.status(400).send({ success: false, message: 'Email is required' });
+                }
+
+                const user = await userCollection.findOne({ email });
+                if (!user) {
+                    return res.status(404).send({ success: false, message: 'User not found' });
+                }
+
+                if (name && name !== user.name) {
+                    await userCollection.updateOne(
+                        { email },
+                        { $set: { name: name } }
+                    );
+                }
+
+                const filter = { userId: new ObjectId(user._id) };
+                const updateDoc = {
+                    $set: {
+                        userId: new ObjectId(user._id),
+                        name: name || '',
+                        contactNumber: contactNumber || '',
+                        photoUrl: photoUrl || '',
+                        specialization: specialization || '',
+                        experienceYears: Number(experienceYears) || 0,
+                        barCouncilNo: barCouncilNo || '',
+                        consultationFee: Number(consultationFee) || 0,
+                        status: status || 'Available',
+                        chamberAddress: chamberAddress || '',
+                        bio: bio || '',
+                        education: education || [],
+                        awards: awards || [],
+                        updatedAt: new Date()
+                    }
+                };
+
+                const options = { upsert: true };
+
+                const result = await lawyerProfileCollection.updateOne(filter, updateDoc, options);
+
+                res.send({
+                    success: true,
+                    message: 'Lawyer profile updated successfully',
+                    result
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
 
 
         await client.db("admin").command({ ping: 1 });

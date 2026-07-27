@@ -342,15 +342,14 @@ async function run() {
                 const comments = await commentCollection.aggregate([
                     { $match: { userEmail: email } },
                     {
-                        // ObjectId কনভার্সন যদি lawyerId স্ট্রিং হিসেবে থাকে
                         $addFields: {
                             lawyerObjectId: { $toObjectId: "$lawyerId" }
                         }
                     },
                     {
                         $lookup: {
-                            from: "lawyerProfiles", // আপনার lawyer কালেকশনের নাম
-                            localField: "lawyerObjectId", // অথবা সরাসরি lawyerId
+                            from: "lawyerProfiles", 
+                            localField: "lawyerObjectId", 
                             foreignField: "_id",
                             as: "lawyerDetails"
                         }
@@ -358,7 +357,7 @@ async function run() {
                     {
                         $unwind: {
                             path: "$lawyerDetails",
-                            preserveNullAndEmptyArrays: true // লয়ার না পাওয়া গেলেও কমেন্ট দেখাবে
+                            preserveNullAndEmptyArrays: true 
                         }
                     }
                 ]).toArray();

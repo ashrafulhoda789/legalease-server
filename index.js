@@ -609,7 +609,7 @@ async function run() {
         });
 
 
-        // 2. GET: Get All Payments (Admin Dashboard-এর জন্য)
+        // 2. GET: Get All Payments 
         app.get('/api/payments', async (req, res) => {
             try {
                 const allPayments = await paymentsCollection

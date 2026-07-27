@@ -145,6 +145,59 @@ async function run() {
             }
         });
 
+        // Get hiring history for a specific logged-in user
+        app.get('/api/hiring-history', async (req, res) => {
+
+            const userEmail = req.query.email;
+
+            if (!userEmail) {
+                return res.status(400).send({ message: 'User email is required' });
+            }
+
+            const query = { userEmail: userEmail };
+
+            const history = await hiringCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+            res.send(history);
+
+        });
+
+        // POST: Submit a hiring request
+        app.post('/api/hire-lawyer', async (req, res) => {
+
+            const hireData = req.body;
+
+            if (!hireData.userEmail || !hireData.lawyerId) {
+                return res.status(400).send({ message: 'User Email and Lawyer ID are required' });
+            }
+
+            const newHireRequest = {
+                userId: hireData.userId,
+                userName: hireData.userName,
+                userEmail: hireData.userEmail,
+                lawyerId: hireData.lawyerId,
+                lawyerName: hireData.lawyerName,
+                lawyerSpecialization: hireData.specialization,
+                consultationFee: hireData.consultationFee,
+                status: 'pending',
+                hiringDate: new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                }),
+                createdAt: new Date()
+            };
+
+            const result = await hiringCollection.insertOne(newHireRequest);
+
+            res.status(201).send({
+                success: true,
+                message: 'Hiring request submitted successfully!',
+                insertedId: result.insertedId
+            });
+
+        });
+
 
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");

@@ -29,6 +29,7 @@ async function run() {
         const userCollection = db.collection('user');
         const hiringCollection = db.collection('hiring-request');
         const lawyerProfileCollection = db.collection('lawyer_profiles');
+        const commentCollection = db.collection('comments');
 
         app.get('/api/lawyers', async (req, res) => {
             const result = await lawyerProfileCollection.find().toArray();
@@ -194,6 +195,163 @@ async function run() {
                 success: true,
                 message: 'Hiring request submitted successfully!',
                 insertedId: result.insertedId
+            });
+
+        });
+
+        // GET: Check if a specific user hired a specific lawyer
+        app.get('/api/check-hiring', async (req, res) => {
+            try {
+                const { email, lawyerId } = req.query;
+
+                if (!email || !lawyerId) {
+                    return res.status(400).send({
+                        isHired: false,
+                        message: 'Email and Lawyer ID are required'
+                    });
+                }
+
+                const query = {
+                    userEmail: email,
+                    lawyerId: lawyerId
+                };
+
+                const existingHire = await hiringCollection.findOne(query);
+
+                if (existingHire) {
+                    return res.send({ isHired: true, hireData: existingHire });
+                } else {
+                    return res.send({ isHired: false });
+                }
+            } catch (error) {
+                res.status(500).send({ isHired: false, message: error.message });
+            }
+        });
+
+        //  all comments made by a specific user
+        app.get('/api/comments/user', async (req, res) => {
+            try {
+                const userEmail = req.query.email;
+
+                if (!userEmail) {
+                    return res.status(400).send({ success: false, message: 'User email is required' });
+                }
+
+                const query = { userEmail: userEmail };
+                const comments = await commentCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+                res.send({
+                    success: true,
+                    data: comments
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+        // GET: All comments for a specific lawyer
+        app.get('/api/comments/lawyer/:lawyerId', async (req, res) => {
+            try {
+                const lawyerId = req.params.lawyerId;
+                const query = { lawyerId: lawyerId };
+
+                const comments = await commentCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+                res.send({
+                    success: true,
+                    data: comments
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+        // POST: Add a new comment/review for a lawyer
+        app.post('/api/comments', async (req, res) => {
+            try {
+                const { userEmail, userName, userPhoto, lawyerId, commentText, rating } = req.body;
+
+                if (!userEmail || !lawyerId || !commentText) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Required fields are missing'
+                    });
+                }
+
+                const newComment = {
+                    userEmail,
+                    userName: userName || 'Anonymous',
+                    userPhoto: userPhoto || '',
+                    lawyerId,
+                    commentText,
+                    rating: Number(rating) || 5,
+                    createdAt: new Date()
+                };
+
+                const result = await commentCollection.insertOne(newComment);
+
+                res.status(201).send({
+                    success: true,
+                    message: 'Comment added successfully!',
+                    insertedId: result.insertedId
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+        app.patch('/api/comments/:id', async (req, res) => {
+
+            const id = req.params.id;
+            const { commentText, rating } = req.body;
+
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: 'Invalid Comment ID' });
+            }
+
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    commentText: commentText,
+                    rating: Number(rating) || 5,
+                    updatedAt: new Date()
+                }
+            };
+
+            const result = await commentCollection.updateOne(filter, updateDoc);
+
+            if (result.matchedCount === 0) {
+                return res.status(404).send({ success: false, message: 'Comment not found' });
+            }
+
+            const updatedComment = await commentCollection.findOne(filter);
+
+            res.send({
+                success: true,
+                message: 'Comment updated successfully',
+                data: updatedComment
+            });
+
+        });
+
+        app.delete('/api/comments/:id', async (req, res) => {
+
+            const id = req.params.id;
+
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: 'Invalid Comment ID' });
+            }
+
+            const query = { _id: new ObjectId(id) };
+            const result = await commentCollection.deleteOne(query);
+
+            if (result.deletedCount === 0) {
+                return res.status(404).send({ success: false, message: 'Comment not found' });
+            }
+
+            res.send({
+                success: true,
+                message: 'Comment deleted successfully'
             });
 
         });

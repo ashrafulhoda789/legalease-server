@@ -146,6 +146,103 @@ async function run() {
             }
         });
 
+        // GET: Fetch all hiring requests for a specific lawyer
+        app.get('/api/lawyer/hiring-requests', async (req, res) => {
+            try {
+                const { lawyerId, email } = req.query;
+
+                if (!lawyerId && !email) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Lawyer ID or Email is required'
+                    });
+                }
+
+                let possibleLawyerIds = [];
+
+                if (lawyerId) {
+                    possibleLawyerIds.push(lawyerId.toString());
+                }
+
+                if (email) {
+                    const user = await userCollection.findOne({ email });
+
+                    if (user) {
+                        possibleLawyerIds.push(user._id.toString());
+
+                        const profile = await lawyerProfileCollection.findOne({
+                            $or: [
+                                { userId: user._id },
+                                { userId: user._id.toString() },
+                                { userId: new ObjectId(user._id) }
+                            ]
+                        });
+
+                        if (profile) {
+                            possibleLawyerIds.push(profile._id.toString());
+                        }
+                    }
+                }
+
+                const query = {
+                    $or: [
+                        { lawyerId: { $in: possibleLawyerIds } },
+                        { lawyerEmail: email } 
+                    ]
+                };
+
+                const requests = await hiringCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+                res.send({
+                    success: true,
+                    data: requests
+                });
+
+            } catch (error) {
+                console.error('Error fetching lawyer hiring requests:', error);
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+        // PATCH: Accept or Reject a hiring request status
+        app.patch('/api/lawyer/hiring-requests/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const { status } = req.body; // status: 'accepted' or 'rejected'
+
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({ success: false, message: 'Invalid Request ID' });
+                }
+
+                if (!['accepted', 'rejected'].includes(status)) {
+                    return res.status(400).send({ success: false, message: 'Invalid status value. Must be accepted or rejected' });
+                }
+
+                const filter = { _id: new ObjectId(id) };
+                const updateDoc = {
+                    $set: {
+                        status: status,
+                        updatedAt: new Date()
+                    }
+                };
+
+                const result = await hiringCollection.updateOne(filter, updateDoc);
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({ success: false, message: 'Hiring request not found' });
+                }
+
+                res.send({
+                    success: true,
+                    message: `Hiring request has been ${status} successfully`,
+                    result
+                });
+
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
         // Get hiring history for a specific logged-in user
         app.get('/api/hiring-history', async (req, res) => {
 

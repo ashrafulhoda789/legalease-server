@@ -187,7 +187,7 @@ async function run() {
                 const query = {
                     $or: [
                         { lawyerId: { $in: possibleLawyerIds } },
-                        { lawyerEmail: email } 
+                        { lawyerEmail: email }
                     ]
                 };
 
@@ -308,12 +308,20 @@ async function run() {
                     });
                 }
 
-                const query = {
-                    userEmail: email,
-                    lawyerId: lawyerId
-                };
+                let targetLawyerIds = [lawyerId];
 
-                const existingHire = await hiringCollection.findOne(query);
+                if (ObjectId.isValid(lawyerId)) {
+                    const profile = await lawyerProfileCollection.findOne({ _id: new ObjectId(lawyerId) });
+                    if (profile && profile.userId) {
+                        targetLawyerIds.push(profile.userId.toString());
+                    }
+                }
+
+                const existingHire = await hiringCollection.findOne({
+                    userEmail: email,
+                    lawyerId: { $in: targetLawyerIds },
+                    status: 'accepted'
+                });
 
                 if (existingHire) {
                     return res.send({ isHired: true, hireData: existingHire });
@@ -326,23 +334,38 @@ async function run() {
         });
 
         //  all comments made by a specific user
+
         app.get('/api/comments/user', async (req, res) => {
             try {
-                const userEmail = req.query.email;
+                const { email } = req.query;
 
-                if (!userEmail) {
-                    return res.status(400).send({ success: false, message: 'User email is required' });
-                }
+                const comments = await commentCollection.aggregate([
+                    { $match: { userEmail: email } },
+                    {
+                        // ObjectId কনভার্সন যদি lawyerId স্ট্রিং হিসেবে থাকে
+                        $addFields: {
+                            lawyerObjectId: { $toObjectId: "$lawyerId" }
+                        }
+                    },
+                    {
+                        $lookup: {
+                            from: "lawyerProfiles", // আপনার lawyer কালেকশনের নাম
+                            localField: "lawyerObjectId", // অথবা সরাসরি lawyerId
+                            foreignField: "_id",
+                            as: "lawyerDetails"
+                        }
+                    },
+                    {
+                        $unwind: {
+                            path: "$lawyerDetails",
+                            preserveNullAndEmptyArrays: true // লয়ার না পাওয়া গেলেও কমেন্ট দেখাবে
+                        }
+                    }
+                ]).toArray();
 
-                const query = { userEmail: userEmail };
-                const comments = await commentCollection.find(query).sort({ createdAt: -1 }).toArray();
-
-                res.send({
-                    success: true,
-                    data: comments
-                });
+                return res.send({ success: true, data: comments });
             } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
+                return res.status(500).send({ success: false, message: error.message });
             }
         });
 

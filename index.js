@@ -31,6 +31,82 @@ async function run() {
         const lawyerProfileCollection = db.collection('lawyer_profiles');
         const commentCollection = db.collection('comments');
 
+        // user api
+        app.get('/api/users', async (req, res) => {
+            try {
+                const users = await userCollection.find(
+                    {},
+                    { projection: { password: 0 } }
+                ).toArray();
+
+                res.send({ success: true, data: users });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+        app.patch('/api/users/role/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const { role } = req.body;
+
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({ success: false, message: 'Invalid User ID' });
+                }
+
+                if (!role) {
+                    return res.status(400).send({ success: false, message: 'Role is required' });
+                }
+
+                const filter = { _id: new ObjectId(id) };
+                const updateDoc = {
+                    $set: {
+                        role: role,
+                        updatedAt: new Date()
+                    }
+                };
+
+                const result = await userCollection.updateOne(filter, updateDoc);
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({ success: false, message: 'User not found' });
+                }
+
+                res.send({
+                    success: true,
+                    message: `User role updated to ${role} successfully`
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+        app.delete('/api/users/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({ success: false, message: 'Invalid User ID' });
+                }
+
+                const query = { _id: new ObjectId(id) };
+                const result = await userCollection.deleteOne(query);
+
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({ success: false, message: 'User not found' });
+                }
+
+                await lawyerProfileCollection.deleteOne({ userId: new ObjectId(id) });
+
+                res.send({
+                    success: true,
+                    message: 'User deleted successfully'
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
         app.get('/api/lawyers', async (req, res) => {
             const result = await lawyerProfileCollection.find().toArray();
             res.send(result);
@@ -348,8 +424,8 @@ async function run() {
                     },
                     {
                         $lookup: {
-                            from: "lawyerProfiles", 
-                            localField: "lawyerObjectId", 
+                            from: "lawyerProfiles",
+                            localField: "lawyerObjectId",
                             foreignField: "_id",
                             as: "lawyerDetails"
                         }
@@ -357,7 +433,7 @@ async function run() {
                     {
                         $unwind: {
                             path: "$lawyerDetails",
-                            preserveNullAndEmptyArrays: true 
+                            preserveNullAndEmptyArrays: true
                         }
                     }
                 ]).toArray();

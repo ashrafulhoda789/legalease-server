@@ -30,6 +30,7 @@ async function run() {
         const hiringCollection = db.collection('hiring-request');
         const lawyerProfileCollection = db.collection('lawyer_profiles');
         const commentCollection = db.collection('comments');
+        const paymentsCollection = db.collection('payment');
 
         // user api
         app.get('/api/users', async (req, res) => {
@@ -338,38 +339,41 @@ async function run() {
 
         // POST: Submit a hiring request
         app.post('/api/hire-lawyer', async (req, res) => {
+            try {
+                const hireData = req.body;
 
-            const hireData = req.body;
+                if (!hireData.userEmail || !hireData.lawyerId) {
+                    return res.status(400).send({ message: 'User Email and Lawyer ID are required' });
+                }
 
-            if (!hireData.userEmail || !hireData.lawyerId) {
-                return res.status(400).send({ message: 'User Email and Lawyer ID are required' });
+                const newHireRequest = {
+                    userId: hireData.userId,
+                    userName: hireData.userName,
+                    userEmail: hireData.userEmail,
+                    lawyerId: hireData.lawyerId,
+                    lawyerName: hireData.lawyerName,
+                    lawyerSpecialization: hireData.specialization,
+                    consultationFee: hireData.consultationFee,
+                    status: 'pending',
+                    paymentStatus: 'unpaid',
+                    hiringDate: new Date().toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    }),
+                    createdAt: new Date()
+                };
+
+                const result = await hiringCollection.insertOne(newHireRequest);
+
+                res.status(201).send({
+                    success: true,
+                    message: 'Hiring request submitted successfully!',
+                    insertedId: result.insertedId
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
             }
-
-            const newHireRequest = {
-                userId: hireData.userId,
-                userName: hireData.userName,
-                userEmail: hireData.userEmail,
-                lawyerId: hireData.lawyerId,
-                lawyerName: hireData.lawyerName,
-                lawyerSpecialization: hireData.specialization,
-                consultationFee: hireData.consultationFee,
-                status: 'pending',
-                hiringDate: new Date().toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                }),
-                createdAt: new Date()
-            };
-
-            const result = await hiringCollection.insertOne(newHireRequest);
-
-            res.status(201).send({
-                success: true,
-                message: 'Hiring request submitted successfully!',
-                insertedId: result.insertedId
-            });
-
         });
 
         // GET: Check if a specific user hired a specific lawyer
@@ -550,6 +554,79 @@ async function run() {
             });
 
         });
+
+        // ==================== PAYMENT HISTORY APIs ====================
+
+        // 1. POST: Save Payment History after Stripe Payment
+        app.post('/api/payments', async (req, res) => {
+            try {
+
+                const { userEmail, userName, lawyerEmail, lawyerName, price, transactionId, hiringId } = req.body;
+
+                // Validation
+                if (!userEmail || !transactionId || !price) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'User Email, Transaction ID, and Price are required!'
+                    });
+                }
+
+                const newPaymentHistory = {
+                    userEmail,
+                    userName: userName || 'N/A',
+                    lawyerEmail: lawyerEmail || 'N/A',
+                    lawyerName: lawyerName || 'N/A',
+                    price: Number(price),
+                    transactionId,
+                    hiringId: hiringId || null, 
+                    status: 'succeeded',
+                    createdAt: new Date()
+                };
+
+                const result = await paymentsCollection.insertOne(newPaymentHistory);
+
+                if (hiringId) {
+                    await hiringCollection.updateOne(
+                        { _id: new ObjectId(hiringId) },
+                        {
+                            $set: {
+                                paymentStatus: 'paid',
+                                updatedAt: new Date()
+                            }
+                        }
+                    );
+                }
+
+                res.status(201).send({
+                    success: true,
+                    message: 'Payment history saved and hiring request updated successfully!',
+                    insertedId: result.insertedId
+                });
+            } catch (error) {
+                console.error('Error saving payment:', error);
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+
+        // 2. GET: Get All Payments (Admin Dashboard-এর জন্য)
+        app.get('/api/payments', async (req, res) => {
+            try {
+                const allPayments = await paymentsCollection
+                    .find()
+                    .sort({ createdAt: -1 }) 
+                    .toArray();
+
+                res.send({
+                    success: true,
+                    data: allPayments
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: error.message });
+            }
+        });
+
+
 
 
         await client.db("admin").command({ ping: 1 });

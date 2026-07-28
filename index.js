@@ -555,9 +555,8 @@ async function run() {
 
         });
 
-        // ==================== PAYMENT HISTORY APIs ====================
-
-        // 1. POST: Save Payment History after Stripe Payment
+       
+        // 1.Save Payment History after Stripe Payment
         app.post('/api/payments', async (req, res) => {
             try {
 

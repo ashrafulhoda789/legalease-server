@@ -34,78 +34,72 @@ async function run() {
 
         // user api
         app.get('/api/users', async (req, res) => {
-            try {
-                const users = await userCollection.find(
-                    {},
-                    { projection: { password: 0 } }
-                ).toArray();
 
-                res.send({ success: true, data: users });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
-            }
+            const users = await userCollection.find(
+                {},
+                { projection: { password: 0 } }
+            ).toArray();
+
+            res.send({ success: true, data: users });
+
         });
 
         app.patch('/api/users/role/:id', async (req, res) => {
-            try {
-                const id = req.params.id;
-                const { role } = req.body;
 
-                if (!ObjectId.isValid(id)) {
-                    return res.status(400).send({ success: false, message: 'Invalid User ID' });
-                }
+            const id = req.params.id;
+            const { role } = req.body;
 
-                if (!role) {
-                    return res.status(400).send({ success: false, message: 'Role is required' });
-                }
-
-                const filter = { _id: new ObjectId(id) };
-                const updateDoc = {
-                    $set: {
-                        role: role,
-                        updatedAt: new Date()
-                    }
-                };
-
-                const result = await userCollection.updateOne(filter, updateDoc);
-
-                if (result.matchedCount === 0) {
-                    return res.status(404).send({ success: false, message: 'User not found' });
-                }
-
-                res.send({
-                    success: true,
-                    message: `User role updated to ${role} successfully`
-                });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: 'Invalid User ID' });
             }
+
+            if (!role) {
+                return res.status(400).send({ success: false, message: 'Role is required' });
+            }
+
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    role: role,
+                    updatedAt: new Date()
+                }
+            };
+
+            const result = await userCollection.updateOne(filter, updateDoc);
+
+            if (result.matchedCount === 0) {
+                return res.status(404).send({ success: false, message: 'User not found' });
+            }
+
+            res.send({
+                success: true,
+                message: `User role updated to ${role} successfully`
+            });
+
         });
 
         app.delete('/api/users/:id', async (req, res) => {
-            try {
-                const id = req.params.id;
 
-                if (!ObjectId.isValid(id)) {
-                    return res.status(400).send({ success: false, message: 'Invalid User ID' });
-                }
+            const id = req.params.id;
 
-                const query = { _id: new ObjectId(id) };
-                const result = await userCollection.deleteOne(query);
-
-                if (result.deletedCount === 0) {
-                    return res.status(404).send({ success: false, message: 'User not found' });
-                }
-
-                await lawyerProfileCollection.deleteOne({ userId: new ObjectId(id) });
-
-                res.send({
-                    success: true,
-                    message: 'User deleted successfully'
-                });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: 'Invalid User ID' });
             }
+
+            const query = { _id: new ObjectId(id) };
+            const result = await userCollection.deleteOne(query);
+
+            if (result.deletedCount === 0) {
+                return res.status(404).send({ success: false, message: 'User not found' });
+            }
+
+            await lawyerProfileCollection.deleteOne({ userId: new ObjectId(id) });
+
+            res.send({
+                success: true,
+                message: 'User deleted successfully'
+            });
+
         });
 
         app.get('/api/lawyers', async (req, res) => {
@@ -237,31 +231,28 @@ async function run() {
 
         // Get lawyer count by category
         app.get('/api/lawyers/category-counts', async (req, res) => {
-            try {
-                const categoryCounts = await lawyerProfileCollection.aggregate([
-                    {
-                        $group: {
-                            _id: "$specialization",
-                            count: { $sum: 1 }
-                        }
+
+            const categoryCounts = await lawyerProfileCollection.aggregate([
+                {
+                    $group: {
+                        _id: "$specialization",
+                        count: { $sum: 1 }
                     }
-                ]).toArray();
+                }
+            ]).toArray();
 
-                console.log("👉 Raw Aggregate Result:", categoryCounts);
+            console.log("👉 Raw Aggregate Result:", categoryCounts);
 
-                const countsMap = {};
-                categoryCounts.forEach(item => {
-                    if (item._id) {
-                        countsMap[item._id.trim()] = item.count;
-                    }
-                });
-                console.log("👉 Formatted Counts Map:", countsMap);
+            const countsMap = {};
+            categoryCounts.forEach(item => {
+                if (item._id) {
+                    countsMap[item._id.trim()] = item.count;
+                }
+            });
+            console.log("👉 Formatted Counts Map:", countsMap);
 
-                res.send(countsMap);
-            } catch (error) {
-                console.error("Error fetching category counts:", error);
-                res.status(500).send({ message: "Failed to fetch counts" });
-            }
+            res.send(countsMap);
+
         });
 
         app.get('/api/lawyers/:id', async (req, res) => {
@@ -275,201 +266,192 @@ async function run() {
 
         // lawyer manage-legal section api
         app.get('/api/lawyer-profile/:email', async (req, res) => {
-            try {
-                const email = req.params.email;
 
-                const user = await userCollection.findOne(
-                    { email: email },
-                    { projection: { password: 0 } }
-                );
+            const email = req.params.email;
 
-                if (!user) {
-                    return res.status(404).send({ success: false, message: 'User not found' });
-                }
+            const user = await userCollection.findOne(
+                { email: email },
+                { projection: { password: 0 } }
+            );
 
-                const profile = await lawyerProfileCollection.findOne({ userId: new ObjectId(user._id) });
-
-                res.send({
-                    success: true,
-                    data: {
-                        user: {
-                            _id: user._id,
-                            name: user.name,
-                            email: user.email,
-                            role: user.role
-                        },
-                        profile: profile || null
-                    }
-                });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
+            if (!user) {
+                return res.status(404).send({ success: false, message: 'User not found' });
             }
+
+            const profile = await lawyerProfileCollection.findOne({ userId: new ObjectId(user._id) });
+
+            res.send({
+                success: true,
+                data: {
+                    user: {
+                        _id: user._id,
+                        name: user.name,
+                        email: user.email,
+                        role: user.role
+                    },
+                    profile: profile || null
+                }
+            });
+
         });
 
         app.patch('/api/lawyer-profile', async (req, res) => {
-            try {
-                const {
-                    email,
-                    name,
-                    contactNumber,
-                    photoUrl,
-                    specialization,
-                    experienceYears,
-                    barCouncilNo,
-                    consultationFee,
-                    status,
-                    chamberAddress,
-                    bio,
-                    education,
-                    awards
-                } = req.body;
 
-                if (!email) {
-                    return res.status(400).send({ success: false, message: 'Email is required' });
-                }
+            const {
+                email,
+                name,
+                contactNumber,
+                photoUrl,
+                specialization,
+                experienceYears,
+                barCouncilNo,
+                consultationFee,
+                status,
+                chamberAddress,
+                bio,
+                education,
+                awards
+            } = req.body;
 
-                const user = await userCollection.findOne({ email });
-                if (!user) {
-                    return res.status(404).send({ success: false, message: 'User not found' });
-                }
-
-                if (name && name !== user.name) {
-                    await userCollection.updateOne(
-                        { email },
-                        { $set: { name: name } }
-                    );
-                }
-
-                const filter = { userId: new ObjectId(user._id) };
-                const updateDoc = {
-                    $set: {
-                        userId: new ObjectId(user._id),
-                        name: name || '',
-                        contactNumber: contactNumber || '',
-                        photoUrl: photoUrl || '',
-                        specialization: specialization || '',
-                        experienceYears: Number(experienceYears) || 0,
-                        barCouncilNo: barCouncilNo || '',
-                        consultationFee: Number(consultationFee) || 0,
-                        status: status || 'Available',
-                        chamberAddress: chamberAddress || '',
-                        bio: bio || '',
-                        education: education || [],
-                        awards: awards || [],
-                        updatedAt: new Date()
-                    }
-                };
-
-                const options = { upsert: true };
-
-                const result = await lawyerProfileCollection.updateOne(filter, updateDoc, options);
-
-                res.send({
-                    success: true,
-                    message: 'Lawyer profile updated successfully',
-                    result
-                });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
+            if (!email) {
+                return res.status(400).send({ success: false, message: 'Email is required' });
             }
+
+            const user = await userCollection.findOne({ email });
+            if (!user) {
+                return res.status(404).send({ success: false, message: 'User not found' });
+            }
+
+            if (name && name !== user.name) {
+                await userCollection.updateOne(
+                    { email },
+                    { $set: { name: name } }
+                );
+            }
+
+            const filter = { userId: new ObjectId(user._id) };
+            const updateDoc = {
+                $set: {
+                    userId: new ObjectId(user._id),
+                    name: name || '',
+                    contactNumber: contactNumber || '',
+                    photoUrl: photoUrl || '',
+                    specialization: specialization || '',
+                    experienceYears: Number(experienceYears) || 0,
+                    barCouncilNo: barCouncilNo || '',
+                    consultationFee: Number(consultationFee) || 0,
+                    status: status || 'Available',
+                    chamberAddress: chamberAddress || '',
+                    bio: bio || '',
+                    education: education || [],
+                    awards: awards || [],
+                    updatedAt: new Date()
+                }
+            };
+
+            const options = { upsert: true };
+
+            const result = await lawyerProfileCollection.updateOne(filter, updateDoc, options);
+
+            res.send({
+                success: true,
+                message: 'Lawyer profile updated successfully',
+                result
+            });
+
         });
 
 
         // GET: Fetch all hiring requests for a specific lawyer
         app.get('/api/lawyer/hiring-requests', async (req, res) => {
-            try {
-                const { lawyerId, email } = req.query;
 
-                if (!lawyerId && !email) {
-                    return res.status(400).send({
-                        success: false,
-                        message: 'Lawyer ID or Email is required'
+            const { lawyerId, email } = req.query;
+
+            if (!lawyerId && !email) {
+                return res.status(400).send({
+                    success: false,
+                    message: 'Lawyer ID or Email is required'
+                });
+            }
+
+            let possibleLawyerIds = [];
+
+            if (lawyerId) {
+                possibleLawyerIds.push(lawyerId.toString());
+            }
+
+            if (email) {
+                const user = await userCollection.findOne({ email });
+
+                if (user) {
+                    possibleLawyerIds.push(user._id.toString());
+
+                    const profile = await lawyerProfileCollection.findOne({
+                        $or: [
+                            { userId: user._id },
+                            { userId: user._id.toString() },
+                            { userId: new ObjectId(user._id) }
+                        ]
                     });
-                }
 
-                let possibleLawyerIds = [];
-
-                if (lawyerId) {
-                    possibleLawyerIds.push(lawyerId.toString());
-                }
-
-                if (email) {
-                    const user = await userCollection.findOne({ email });
-
-                    if (user) {
-                        possibleLawyerIds.push(user._id.toString());
-
-                        const profile = await lawyerProfileCollection.findOne({
-                            $or: [
-                                { userId: user._id },
-                                { userId: user._id.toString() },
-                                { userId: new ObjectId(user._id) }
-                            ]
-                        });
-
-                        if (profile) {
-                            possibleLawyerIds.push(profile._id.toString());
-                        }
+                    if (profile) {
+                        possibleLawyerIds.push(profile._id.toString());
                     }
                 }
-
-                const query = {
-                    $or: [
-                        { lawyerId: { $in: possibleLawyerIds } },
-                        { lawyerEmail: email }
-                    ]
-                };
-
-                const requests = await hiringCollection.find(query).sort({ createdAt: -1 }).toArray();
-
-                res.send({
-                    success: true,
-                    data: requests
-                });
-
-            } catch (error) {
-                console.error('Error fetching lawyer hiring requests:', error);
-                res.status(500).send({ success: false, message: error.message });
             }
+
+            const query = {
+                $or: [
+                    { lawyerId: { $in: possibleLawyerIds } },
+                    { lawyerEmail: email }
+                ]
+            };
+
+            const requests = await hiringCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+            res.send({
+                success: true,
+                data: requests
+            });
+
+
         });
 
         // PATCH: Accept or Reject a hiring request status
         app.patch('/api/lawyer/hiring-requests/:id', async (req, res) => {
-            try {
-                const id = req.params.id;
-                const { status } = req.body; // status: 'accepted' or 'rejected'
 
-                if (!ObjectId.isValid(id)) {
-                    return res.status(400).send({ success: false, message: 'Invalid Request ID' });
-                }
+            const id = req.params.id;
+            const { status } = req.body; // status: 'accepted' or 'rejected'
 
-                if (!['accepted', 'rejected'].includes(status)) {
-                    return res.status(400).send({ success: false, message: 'Invalid status value. Must be accepted or rejected' });
-                }
-
-                const filter = { _id: new ObjectId(id) };
-                const updateDoc = {
-                    $set: {
-                        status: status,
-                        updatedAt: new Date()
-                    }
-                };
-
-                const result = await hiringCollection.updateOne(filter, updateDoc);
-
-                if (result.matchedCount === 0) {
-                    return res.status(404).send({ success: false, message: 'Hiring request not found' });
-                }
-
-                res.send({
-                    success: true,
-                    message: `Hiring request has been ${status} successfully`,
-                    result
-                });
-
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: 'Invalid Request ID' });
             }
+
+            if (!['accepted', 'rejected'].includes(status)) {
+                return res.status(400).send({ success: false, message: 'Invalid status value. Must be accepted or rejected' });
+            }
+
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    status: status,
+                    updatedAt: new Date()
+                }
+            };
+
+            const result = await hiringCollection.updateOne(filter, updateDoc);
+
+            if (result.matchedCount === 0) {
+                return res.status(404).send({ success: false, message: 'Hiring request not found' });
+            }
+
+            res.send({
+                success: true,
+                message: `Hiring request has been ${status} successfully`,
+                result
+            });
+
+
         });
 
         // Get hiring history for a specific logged-in user
@@ -491,164 +473,154 @@ async function run() {
 
         // POST: Submit a hiring request
         app.post('/api/hire-lawyer', async (req, res) => {
-            try {
-                const hireData = req.body;
 
-                if (!hireData.userEmail || !hireData.lawyerId) {
-                    return res.status(400).send({ message: 'User Email and Lawyer ID are required' });
-                }
+            const hireData = req.body;
 
-                const newHireRequest = {
-                    userId: hireData.userId,
-                    userName: hireData.userName,
-                    userEmail: hireData.userEmail,
-                    lawyerId: hireData.lawyerId,
-                    lawyerName: hireData.lawyerName,
-                    lawyerSpecialization: hireData.specialization,
-                    consultationFee: hireData.consultationFee,
-                    status: 'pending',
-                    paymentStatus: 'unpaid',
-                    hiringDate: new Date().toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                    }),
-                    createdAt: new Date()
-                };
-
-                const result = await hiringCollection.insertOne(newHireRequest);
-
-                res.status(201).send({
-                    success: true,
-                    message: 'Hiring request submitted successfully!',
-                    insertedId: result.insertedId
-                });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
+            if (!hireData.userEmail || !hireData.lawyerId) {
+                return res.status(400).send({ message: 'User Email and Lawyer ID are required' });
             }
+
+            const newHireRequest = {
+                userId: hireData.userId,
+                userName: hireData.userName,
+                userEmail: hireData.userEmail,
+                lawyerId: hireData.lawyerId,
+                lawyerName: hireData.lawyerName,
+                lawyerSpecialization: hireData.specialization,
+                consultationFee: hireData.consultationFee,
+                status: 'pending',
+                paymentStatus: 'unpaid',
+                hiringDate: new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                }),
+                createdAt: new Date()
+            };
+
+            const result = await hiringCollection.insertOne(newHireRequest);
+
+            res.status(201).send({
+                success: true,
+                message: 'Hiring request submitted successfully!',
+                insertedId: result.insertedId
+            });
+
         });
 
         // GET: Check if a specific user hired a specific lawyer
         app.get('/api/check-hiring', async (req, res) => {
-            try {
-                const { email, lawyerId } = req.query;
 
-                if (!email || !lawyerId) {
-                    return res.status(400).send({
-                        isHired: false,
-                        message: 'Email and Lawyer ID are required'
-                    });
-                }
+            const { email, lawyerId } = req.query;
 
-                let targetLawyerIds = [lawyerId];
-
-                if (ObjectId.isValid(lawyerId)) {
-                    const profile = await lawyerProfileCollection.findOne({ _id: new ObjectId(lawyerId) });
-                    if (profile && profile.userId) {
-                        targetLawyerIds.push(profile.userId.toString());
-                    }
-                }
-
-                const existingHire = await hiringCollection.findOne({
-                    userEmail: email,
-                    lawyerId: { $in: targetLawyerIds },
-                    status: 'accepted'
+            if (!email || !lawyerId) {
+                return res.status(400).send({
+                    isHired: false,
+                    message: 'Email and Lawyer ID are required'
                 });
-
-                if (existingHire) {
-                    return res.send({ isHired: true, hireData: existingHire });
-                } else {
-                    return res.send({ isHired: false });
-                }
-            } catch (error) {
-                res.status(500).send({ isHired: false, message: error.message });
             }
+
+            let targetLawyerIds = [lawyerId];
+
+            if (ObjectId.isValid(lawyerId)) {
+                const profile = await lawyerProfileCollection.findOne({ _id: new ObjectId(lawyerId) });
+                if (profile && profile.userId) {
+                    targetLawyerIds.push(profile.userId.toString());
+                }
+            }
+
+            const existingHire = await hiringCollection.findOne({
+                userEmail: email,
+                lawyerId: { $in: targetLawyerIds },
+                status: 'accepted'
+            });
+
+            if (existingHire) {
+                return res.send({ isHired: true, hireData: existingHire });
+            } else {
+                return res.send({ isHired: false });
+            }
+
         });
 
         //  all comments made by a specific user
 
         app.get('/api/comments/user', async (req, res) => {
-            try {
-                const { email } = req.query;
 
-                const comments = await commentCollection.aggregate([
-                    { $match: { userEmail: email } },
-                    {
-                        $addFields: {
-                            lawyerObjectId: { $toObjectId: "$lawyerId" }
-                        }
-                    },
-                    {
-                        $lookup: {
-                            from: "lawyerProfiles",
-                            localField: "lawyerObjectId",
-                            foreignField: "_id",
-                            as: "lawyerDetails"
-                        }
-                    },
-                    {
-                        $unwind: {
-                            path: "$lawyerDetails",
-                            preserveNullAndEmptyArrays: true
-                        }
+            const { email } = req.query;
+
+            const comments = await commentCollection.aggregate([
+                { $match: { userEmail: email } },
+                {
+                    $addFields: {
+                        lawyerObjectId: { $toObjectId: "$lawyerId" }
                     }
-                ]).toArray();
+                },
+                {
+                    $lookup: {
+                        from: "lawyerProfiles",
+                        localField: "lawyerObjectId",
+                        foreignField: "_id",
+                        as: "lawyerDetails"
+                    }
+                },
+                {
+                    $unwind: {
+                        path: "$lawyerDetails",
+                        preserveNullAndEmptyArrays: true
+                    }
+                }
+            ]).toArray();
 
-                return res.send({ success: true, data: comments });
-            } catch (error) {
-                return res.status(500).send({ success: false, message: error.message });
-            }
+            return res.send({ success: true, data: comments });
+
         });
 
         // GET: All comments for a specific lawyer
         app.get('/api/comments/lawyer/:lawyerId', async (req, res) => {
-            try {
-                const lawyerId = req.params.lawyerId;
-                const query = { lawyerId: lawyerId };
 
-                const comments = await commentCollection.find(query).sort({ createdAt: -1 }).toArray();
+            const lawyerId = req.params.lawyerId;
+            const query = { lawyerId: lawyerId };
 
-                res.send({
-                    success: true,
-                    data: comments
-                });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
-            }
+            const comments = await commentCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+            res.send({
+                success: true,
+                data: comments
+            });
+
         });
 
         // POST: Add a new comment/review for a lawyer
         app.post('/api/comments', async (req, res) => {
-            try {
-                const { userEmail, userName, userPhoto, lawyerId, commentText, rating } = req.body;
 
-                if (!userEmail || !lawyerId || !commentText) {
-                    return res.status(400).send({
-                        success: false,
-                        message: 'Required fields are missing'
-                    });
-                }
+            const { userEmail, userName, userPhoto, lawyerId, commentText, rating } = req.body;
 
-                const newComment = {
-                    userEmail,
-                    userName: userName || 'Anonymous',
-                    userPhoto: userPhoto || '',
-                    lawyerId,
-                    commentText,
-                    rating: Number(rating) || 5,
-                    createdAt: new Date()
-                };
-
-                const result = await commentCollection.insertOne(newComment);
-
-                res.status(201).send({
-                    success: true,
-                    message: 'Comment added successfully!',
-                    insertedId: result.insertedId
+            if (!userEmail || !lawyerId || !commentText) {
+                return res.status(400).send({
+                    success: false,
+                    message: 'Required fields are missing'
                 });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
             }
+
+            const newComment = {
+                userEmail,
+                userName: userName || 'Anonymous',
+                userPhoto: userPhoto || '',
+                lawyerId,
+                commentText,
+                rating: Number(rating) || 5,
+                createdAt: new Date()
+            };
+
+            const result = await commentCollection.insertOne(newComment);
+
+            res.status(201).send({
+                success: true,
+                message: 'Comment added successfully!',
+                insertedId: result.insertedId
+            });
+
         });
 
         app.patch('/api/comments/:id', async (req, res) => {
@@ -710,71 +682,66 @@ async function run() {
 
         // 1.Save Payment History after Stripe Payment
         app.post('/api/payments', async (req, res) => {
-            try {
 
-                const { userEmail, userName, lawyerEmail, lawyerName, price, transactionId, hiringId } = req.body;
 
-                // Validation
-                if (!userEmail || !transactionId || !price) {
-                    return res.status(400).send({
-                        success: false,
-                        message: 'User Email, Transaction ID, and Price are required!'
-                    });
-                }
+            const { userEmail, userName, lawyerEmail, lawyerName, price, transactionId, hiringId } = req.body;
 
-                const newPaymentHistory = {
-                    userEmail,
-                    userName: userName || 'N/A',
-                    lawyerEmail: lawyerEmail || 'N/A',
-                    lawyerName: lawyerName || 'N/A',
-                    price: Number(price),
-                    transactionId,
-                    hiringId: hiringId || null,
-                    status: 'succeeded',
-                    createdAt: new Date()
-                };
-
-                const result = await paymentsCollection.insertOne(newPaymentHistory);
-
-                if (hiringId) {
-                    await hiringCollection.updateOne(
-                        { _id: new ObjectId(hiringId) },
-                        {
-                            $set: {
-                                paymentStatus: 'paid',
-                                updatedAt: new Date()
-                            }
-                        }
-                    );
-                }
-
-                res.status(201).send({
-                    success: true,
-                    message: 'Payment history saved and hiring request updated successfully!',
-                    insertedId: result.insertedId
+            // Validation
+            if (!userEmail || !transactionId || !price) {
+                return res.status(400).send({
+                    success: false,
+                    message: 'User Email, Transaction ID, and Price are required!'
                 });
-            } catch (error) {
-                console.error('Error saving payment:', error);
-                res.status(500).send({ success: false, message: error.message });
             }
+
+            const newPaymentHistory = {
+                userEmail,
+                userName: userName || 'N/A',
+                lawyerEmail: lawyerEmail || 'N/A',
+                lawyerName: lawyerName || 'N/A',
+                price: Number(price),
+                transactionId,
+                hiringId: hiringId || null,
+                status: 'succeeded',
+                createdAt: new Date()
+            };
+
+            const result = await paymentsCollection.insertOne(newPaymentHistory);
+
+            if (hiringId) {
+                await hiringCollection.updateOne(
+                    { _id: new ObjectId(hiringId) },
+                    {
+                        $set: {
+                            paymentStatus: 'paid',
+                            updatedAt: new Date()
+                        }
+                    }
+                );
+            }
+
+            res.status(201).send({
+                success: true,
+                message: 'Payment history saved and hiring request updated successfully!',
+                insertedId: result.insertedId
+            });
+
         });
 
 
         // 2. GET: Get All Payments 
         app.get('/api/payments', async (req, res) => {
-            try {
-                const allPayments = await paymentsCollection
-                    .find()
-                    .sort({ createdAt: -1 })
-                    .toArray();
 
-                res.send({
-                    success: true,
-                    data: allPayments
-                });
-            } catch (error) {
-                res.status(500).send({ success: false, message: error.message });
-            }
+            const allPayments = await paymentsCollection
+                .find()
+                .sort({ createdAt: -1 })
+                .toArray();
+
+            res.send({
+                success: true,
+                data: allPayments
+            });
+
         });
 
 

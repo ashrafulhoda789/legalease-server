@@ -109,48 +109,69 @@ async function run() {
         });
 
         app.get('/api/lawyers', async (req, res) => {
-            try {
-                const { search, category, page = 1, limit = 8 } = req.query;
-                const query = {};
 
-                if (search) {
-                    query.$or = [
+            const { search, category, page = 1, limit = 8 } = req.query;
+
+            const conditions = [];
+
+            if (search) {
+                conditions.push({
+                    $or: [
                         { name: { $regex: search, $options: 'i' } },
                         { 'user.name': { $regex: search, $options: 'i' } },
                         { specialization: { $regex: search, $options: 'i' } },
                         { 'profile.specialization': { $regex: search, $options: 'i' } }
-                    ];
-                }
-
-                if (category && category !== 'All') {
-                    query.$or = [
-                        { specialization: { $regex: category, $options: 'i' } },
-                        { 'profile.specialization': { $regex: category, $options: 'i' } }
-                    ];
-                }
-
-                const pageNum = parseInt(page, 10);
-                const limitNum = parseInt(limit, 10);
-                const skip = (pageNum - 1) * limitNum;
-
-                const total = await lawyerProfileCollection.countDocuments(query);
-                const lawyers = await lawyerProfileCollection
-                    .find(query)
-                    .skip(skip)
-                    .limit(limitNum)
-                    .toArray();
-
-                res.send({ total, lawyers, page: pageNum, totalPages: Math.ceil(total / limitNum) });
-            } catch (error) {
-                console.error('Error fetching lawyers:', error);
-                res.status(500).send({ message: 'Failed to fetch lawyers' });
+                    ]
+                });
             }
+
+            if (category && category !== 'All') {
+                let categoryRegex = category;
+
+                if (category.toLowerCase().includes('corporate')) {
+                    categoryRegex = 'Corporate|Licensed Attorney';
+                } else if (category.toLowerCase().includes('criminal')) {
+                    categoryRegex = 'Criminal';
+                } else if (category.toLowerCase().includes('family')) {
+                    categoryRegex = 'Family|Property';
+                } else if (category.toLowerCase().includes('cyber') || category.toLowerCase().includes('ip')) {
+                    categoryRegex = 'Cyber|IP';
+                }
+
+                conditions.push({
+                    $or: [
+                        { specialization: { $regex: categoryRegex, $options: 'i' } },
+                        { 'profile.specialization': { $regex: categoryRegex, $options: 'i' } }
+                    ]
+                });
+            }
+
+            const query = conditions.length > 0 ? { $and: conditions } : {};
+
+            const pageNum = parseInt(page, 10) || 1;
+            const limitNum = parseInt(limit, 10) || 8;
+            const skip = (pageNum - 1) * limitNum;
+
+            const total = await lawyerProfileCollection.countDocuments(query);
+            const lawyers = await lawyerProfileCollection
+                .find(query)
+                .skip(skip)
+                .limit(limitNum)
+                .toArray();
+
+            res.send({
+                total,
+                lawyers,
+                page: pageNum,
+                totalPages: Math.ceil(total / limitNum) || 1
+            });
+
         });
 
         app.get('/api/lawyers/top-hired', async (req, res) => {
 
             const topLawyers = await hiringCollection.aggregate([
-                
+
                 {
                     $group: {
                         _id: "$lawyerId",
@@ -167,13 +188,13 @@ async function run() {
 
                 {
                     $lookup: {
-                        from: "lawyer_profiles", 
+                        from: "lawyer_profiles",
                         let: { hiringLawyerId: "$_id" },
                         pipeline: [
                             {
                                 $match: {
                                     $expr: {
-                                       
+
                                         $eq: [{ $toString: "$_id" }, "$$hiringLawyerId"]
                                     }
                                 }
@@ -214,6 +235,34 @@ async function run() {
 
         });
 
+        // Get lawyer count by category
+        app.get('/api/lawyers/category-counts', async (req, res) => {
+            try {
+                const categoryCounts = await lawyerProfileCollection.aggregate([
+                    {
+                        $group: {
+                            _id: "$specialization",
+                            count: { $sum: 1 }
+                        }
+                    }
+                ]).toArray();
+
+                console.log("👉 Raw Aggregate Result:", categoryCounts);
+
+                const countsMap = {};
+                categoryCounts.forEach(item => {
+                    if (item._id) {
+                        countsMap[item._id.trim()] = item.count;
+                    }
+                });
+                console.log("👉 Formatted Counts Map:", countsMap);
+
+                res.send(countsMap);
+            } catch (error) {
+                console.error("Error fetching category counts:", error);
+                res.status(500).send({ message: "Failed to fetch counts" });
+            }
+        });
 
         app.get('/api/lawyers/:id', async (req, res) => {
             const id = req.params.id;

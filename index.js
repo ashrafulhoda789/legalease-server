@@ -113,7 +113,6 @@ async function run() {
                 const { search, category, page = 1, limit = 8 } = req.query;
                 const query = {};
 
-                // Search by Name or Specialization
                 if (search) {
                     query.$or = [
                         { name: { $regex: search, $options: 'i' } },
@@ -123,7 +122,6 @@ async function run() {
                     ];
                 }
 
-                // Filter by Category/Specialization
                 if (category && category !== 'All') {
                     query.$or = [
                         { specialization: { $regex: category, $options: 'i' } },
@@ -148,7 +146,75 @@ async function run() {
                 res.status(500).send({ message: 'Failed to fetch lawyers' });
             }
         });
-        
+
+        app.get('/api/lawyers/top-hired', async (req, res) => {
+
+            const topLawyers = await hiringCollection.aggregate([
+                
+                {
+                    $group: {
+                        _id: "$lawyerId",
+                        totalHires: { $sum: 1 },
+                        lawyerName: { $first: "$lawyerName" },
+                        lawyerSpecialization: { $first: "$lawyerSpecialization" }
+                    }
+                },
+
+                { $match: { _id: { $ne: null, $exists: true } } },
+
+                { $sort: { totalHires: -1 } },
+                { $limit: 3 },
+
+                {
+                    $lookup: {
+                        from: "lawyer_profiles", 
+                        let: { hiringLawyerId: "$_id" },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                       
+                                        $eq: [{ $toString: "$_id" }, "$$hiringLawyerId"]
+                                    }
+                                }
+                            }
+                        ],
+                        as: "profileDetails"
+                    }
+                },
+
+                {
+                    $unwind: {
+                        path: "$profileDetails",
+                        preserveNullAndEmptyArrays: true
+                    }
+                }
+            ]).toArray();
+
+            const formattedTopLawyers = topLawyers.map((item, index) => {
+                const profile = item.profileDetails || {};
+
+                const lawyerImg = profile?.photoUrl || profile?.image || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=400';
+
+                return {
+                    _id: profile._id || item._id,
+                    name: profile.name || item.lawyerName || 'Advocate',
+                    specialization: profile.specialization || item.lawyerSpecialization || 'Licensed Attorney',
+                    image: lawyerImg,
+                    photoUrl: lawyerImg,
+                    experienceYears: profile.experienceYears || 0,
+                    consultationFee: profile.consultationFee || 0,
+                    contactNumber: profile.contactNumber || '',
+                    totalHires: item.totalHires,
+                    rank: index + 1
+                };
+            });
+
+            res.send(formattedTopLawyers);
+
+        });
+
+
         app.get('/api/lawyers/:id', async (req, res) => {
             const id = req.params.id;
 
@@ -258,6 +324,7 @@ async function run() {
                 res.status(500).send({ success: false, message: error.message });
             }
         });
+
 
         // GET: Fetch all hiring requests for a specific lawyer
         app.get('/api/lawyer/hiring-requests', async (req, res) => {

@@ -109,10 +109,46 @@ async function run() {
         });
 
         app.get('/api/lawyers', async (req, res) => {
-            const result = await lawyerProfileCollection.find().toArray();
-            res.send(result);
-        })
+            try {
+                const { search, category, page = 1, limit = 8 } = req.query;
+                const query = {};
 
+                // Search by Name or Specialization
+                if (search) {
+                    query.$or = [
+                        { name: { $regex: search, $options: 'i' } },
+                        { 'user.name': { $regex: search, $options: 'i' } },
+                        { specialization: { $regex: search, $options: 'i' } },
+                        { 'profile.specialization': { $regex: search, $options: 'i' } }
+                    ];
+                }
+
+                // Filter by Category/Specialization
+                if (category && category !== 'All') {
+                    query.$or = [
+                        { specialization: { $regex: category, $options: 'i' } },
+                        { 'profile.specialization': { $regex: category, $options: 'i' } }
+                    ];
+                }
+
+                const pageNum = parseInt(page, 10);
+                const limitNum = parseInt(limit, 10);
+                const skip = (pageNum - 1) * limitNum;
+
+                const total = await lawyerProfileCollection.countDocuments(query);
+                const lawyers = await lawyerProfileCollection
+                    .find(query)
+                    .skip(skip)
+                    .limit(limitNum)
+                    .toArray();
+
+                res.send({ total, lawyers, page: pageNum, totalPages: Math.ceil(total / limitNum) });
+            } catch (error) {
+                console.error('Error fetching lawyers:', error);
+                res.status(500).send({ message: 'Failed to fetch lawyers' });
+            }
+        });
+        
         app.get('/api/lawyers/:id', async (req, res) => {
             const id = req.params.id;
 
@@ -555,7 +591,7 @@ async function run() {
 
         });
 
-       
+
         // 1.Save Payment History after Stripe Payment
         app.post('/api/payments', async (req, res) => {
             try {
@@ -577,7 +613,7 @@ async function run() {
                     lawyerName: lawyerName || 'N/A',
                     price: Number(price),
                     transactionId,
-                    hiringId: hiringId || null, 
+                    hiringId: hiringId || null,
                     status: 'succeeded',
                     createdAt: new Date()
                 };
@@ -613,7 +649,7 @@ async function run() {
             try {
                 const allPayments = await paymentsCollection
                     .find()
-                    .sort({ createdAt: -1 }) 
+                    .sort({ createdAt: -1 })
                     .toArray();
 
                 res.send({

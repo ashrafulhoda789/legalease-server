@@ -31,6 +31,77 @@ async function run() {
         const lawyerProfileCollection = db.collection('lawyer_profiles');
         const commentCollection = db.collection('comments');
         const paymentsCollection = db.collection('payment');
+        const sessionColletion = db.collection('session')
+
+        // verify Token
+        const verifyToken = async (req, res, next) => {
+
+            const authHeader = req.headers?.authorization;
+            if (!authHeader) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+
+            const token = authHeader.split(' ')[1]
+            // console.log(token);
+
+            if (!token) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+
+            const query = { token: token }
+            const session = await sessionColletion.findOne(query)
+            // console.log(session);
+
+            if (!session) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+
+            const userId = session.userId
+
+            const userQuery = {
+                _id: userId
+            }
+
+            const user = await userCollection.findOne(userQuery)
+            
+
+            if (!user) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+
+            // set data in the req object
+            req.user = user;
+
+            next();
+        }
+
+        // must be used after verify token middleware
+        const verifyUser = async (req, res, next) => {
+
+            if (req.user?.role !== 'user') {
+                return res.status(403).send({ message: 'Forbidden access' })
+            }
+
+            next();
+        }
+
+        // must be used after verify token middleware
+        const verifyAdmin = async (req, res, next) => {
+            if (req.user?.role !== 'admin') {
+                return res.status(403).send({ message: 'Forbidden access' })
+            }
+
+            next();
+        }
+
+        // must be used after verify token middleware
+        const verifyLawyer = async (req, res, next) => {
+            if (req.user?.role !== 'lawyer') {
+                return res.status(403).send({ message: 'Forbidden access' })
+            }
+
+            next();
+        }
 
         // user api
         app.get('/api/users', async (req, res) => {
@@ -44,7 +115,7 @@ async function run() {
 
         });
 
-        app.patch('/api/users/role/:id', async (req, res) => {
+        app.patch('/api/users/role/:id', verifyToken, verifyAdmin, async (req, res) => {
 
             const id = req.params.id;
             const { role } = req.body;
@@ -78,7 +149,7 @@ async function run() {
 
         });
 
-        app.delete('/api/users/:id', async (req, res) => {
+        app.delete('/api/users/:id', verifyToken, verifyAdmin, async (req, res) => {
 
             const id = req.params.id;
 
@@ -241,15 +312,12 @@ async function run() {
                 }
             ]).toArray();
 
-            console.log("👉 Raw Aggregate Result:", categoryCounts);
-
             const countsMap = {};
             categoryCounts.forEach(item => {
                 if (item._id) {
                     countsMap[item._id.trim()] = item.count;
                 }
             });
-            console.log("👉 Formatted Counts Map:", countsMap);
 
             res.send(countsMap);
 
@@ -295,7 +363,7 @@ async function run() {
 
         });
 
-        app.patch('/api/lawyer-profile', async (req, res) => {
+        app.patch('/api/lawyer-profile', verifyToken, verifyLawyer, async (req, res) => {
 
             const {
                 email,
@@ -363,7 +431,7 @@ async function run() {
 
 
         // GET: Fetch all hiring requests for a specific lawyer
-        app.get('/api/lawyer/hiring-requests', async (req, res) => {
+        app.get('/api/lawyer/hiring-requests',  async (req, res) => {
 
             const { lawyerId, email } = req.query;
 
@@ -418,7 +486,7 @@ async function run() {
         });
 
         // PATCH: Accept or Reject a hiring request status
-        app.patch('/api/lawyer/hiring-requests/:id', async (req, res) => {
+        app.patch('/api/lawyer/hiring-requests/:id', verifyToken, verifyLawyer,  async (req, res) => {
 
             const id = req.params.id;
             const { status } = req.body; // status: 'accepted' or 'rejected'
@@ -455,7 +523,7 @@ async function run() {
         });
 
         // Get hiring history for a specific logged-in user
-        app.get('/api/hiring-history', async (req, res) => {
+        app.get('/api/hiring-history',  async (req, res) => {
 
             const userEmail = req.query.email;
 
@@ -472,7 +540,7 @@ async function run() {
         });
 
         // POST: Submit a hiring request
-        app.post('/api/hire-lawyer', async (req, res) => {
+        app.post('/api/hire-lawyer', verifyToken, verifyAdmin, verifyUser, async (req, res) => {
 
             const hireData = req.body;
 
@@ -625,7 +693,7 @@ async function run() {
 
         });
 
-        app.patch('/api/comments/:id', async (req, res) => {
+        app.patch('/api/comments/:id',   async (req, res) => {
 
             const id = req.params.id;
             const { commentText, rating } = req.body;

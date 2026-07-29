@@ -7,7 +7,7 @@ This is the backend REST API server for **LegalEase – Online Lawyer Hiring Pla
 ## 🌐 Related Repositories & Live Links
 
 - **Live Application:** [https://legalease-client-five.vercel.app](https://legalease-client-five.vercel.app)
-- ** Backend Server:** [https://legalease-server-three.vercel.app/](https://legalease-server-three.vercel.app)
+- **Backend Server:** [https://legalease-server-three.vercel.app/](https://legalease-server-three.vercel.app)
 
 ---
 

@@ -558,7 +558,7 @@ async function run() {
                 },
                 {
                     $lookup: {
-                        from: "lawyerProfiles",
+                        from: "lawyer_profiles",
                         localField: "lawyerObjectId",
                         foreignField: "_id",
                         as: "lawyerDetails"
@@ -572,6 +572,8 @@ async function run() {
                 }
             ]).toArray();
 
+            // console.log('comments data',comments);
+
             return res.send({ success: true, data: comments });
 
         });
@@ -583,7 +585,7 @@ async function run() {
             const query = { lawyerId: lawyerId };
 
             const comments = await commentCollection.find(query).sort({ createdAt: -1 }).toArray();
-
+            // console.log(comments);
             res.send({
                 success: true,
                 data: comments
